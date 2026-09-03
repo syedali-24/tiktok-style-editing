@@ -4,6 +4,11 @@ import { exportVideo, downloadBlob } from "./exporter.js";
 
 const $ = (id) => document.getElementById(id);
 
+if (document.fonts) {
+  document.fonts.load("400 40px 'TikTok Sans'");
+  document.fonts.load("800 40px 'TikTok Sans'");
+}
+
 const video = $("sourceVideo");
 const canvas = $("previewCanvas");
 const ctx = canvas.getContext("2d");
@@ -31,11 +36,17 @@ $("videoInput").addEventListener("change", (e) => {
   const file = e.target.files[0];
   if (!file) return;
   loadClip(file);
+  e.target.value = "";
 });
 
 function loadClip(file) {
   const url = URL.createObjectURL(file);
+  video.onerror = () => {
+    const code = video.error ? video.error.code : "unknown";
+    toast(`Couldn't load that video (error ${code}) — try exporting it as a standard .mp4 (H.264) first`);
+  };
   video.src = url;
+  video.load();
   video.onloadedmetadata = () => {
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -139,8 +150,6 @@ function truncate(str, n) {
 // ---------------- Inspector ----------------
 const inspectorEmpty = $("inspectorEmpty");
 const inspectorBody = $("inspectorBody");
-const fields = ["fText", "fFont", "fSize", "fColor", "fBg", "fBgOn", "fBgOpacity", "fRadius", "fBold", "fItalic", "fAlign", "fStart", "fEnd"];
-
 function renderInspector(layer) {
   renderTextTrack();
   if (!layer) {
@@ -155,8 +164,11 @@ function renderInspector(layer) {
   $("fFont").value = layer.fontFamily;
   $("fSize").value = layer.fontSize;
   $("fColor").value = layer.color;
+  $("fStrokeOn").checked = layer.strokeOn;
+  $("fStrokeColor").value = layer.strokeColor;
   $("fBg").value = layer.bgColor;
   $("fBgOn").checked = layer.bgOn;
+  $("fBgMode").value = layer.bgMode;
   $("fBgOpacity").value = layer.bgOpacity;
   $("fRadius").value = layer.radius;
   $("fBold").checked = layer.bold;
@@ -179,8 +191,11 @@ bindInspectorField("fText", "text");
 bindInspectorField("fFont", "fontFamily");
 bindInspectorField("fSize", "fontSize", Number);
 bindInspectorField("fColor", "color");
+bindInspectorField("fStrokeOn", "strokeOn");
+bindInspectorField("fStrokeColor", "strokeColor");
 bindInspectorField("fBg", "bgColor");
 bindInspectorField("fBgOn", "bgOn");
+bindInspectorField("fBgMode", "bgMode");
 bindInspectorField("fBgOpacity", "bgOpacity", Number);
 bindInspectorField("fRadius", "radius", Number);
 bindInspectorField("fBold", "bold");
