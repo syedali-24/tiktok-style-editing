@@ -1,282 +1,270 @@
-// textEditor.js — caption layers: create, drag/resize on the stage,
-// style panel binding, and drawing the exact same look onto the export canvas.
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ClipDesk — caption &amp; sound editor</title>
+<link rel="stylesheet" href="css/style.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=TikTok+Sans:opsz,wght@12..36,300..900&display=swap" rel="stylesheet" />
+</head>
+<body>
 
-const QUICK_STYLES = {
-  classic: { color: "#ffffff", bgOn: false, bold: true, italic: false, fontFamily: "'Inter', sans-serif" },
-  "bold-block": { color: "#ffffff", bgOn: true, bgColor: "#000000", bgOpacity: 90, bold: true, radius: 6, fontFamily: "'Archivo Black', sans-serif" },
-  minimal: { color: "#ffffff", bgOn: false, bold: false, italic: false, fontFamily: "'Inter', sans-serif" },
-  highlight: { color: "#14120f", bgOn: true, bgColor: "#e8543a", bgOpacity: 100, bold: true, radius: 4, fontFamily: "'Poppins', sans-serif" },
-};
+<div class="app">
 
-let idCounter = 1;
+  <!-- Top bar -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">◈</span>
+      <span class="brand-name">ClipDesk</span>
+    </div>
+    <div class="project-name" id="projectName">untitled clip</div>
+    <div class="topbar-actions">
+      <label class="btn btn-ghost" for="videoInput">Open clip</label>
+      <input type="file" id="videoInput" accept="video/*" hidden />
+      <button class="btn btn-primary" id="exportBtn" disabled>Export video</button>
+    </div>
+  </header>
 
-export function createDefaultLayer(duration) {
-  return {
-    id: "t" + idCounter++,
-    text: "New caption",
-    xPct: 0.5, yPct: 0.8, wPct: 0.7,
-    fontFamily: "'Inter', sans-serif",
-    fontSize: 40,
-    color: "#ffffff",
-    bgOn: false,
-    bgColor: "#000000",
-    bgOpacity: 70,
-    radius: 8,
-    bold: true,
-    italic: false,
-    align: "center",
-    start: 0,
-    end: Math.min(duration || 5, duration || 5),
-  };
-}
+  <div class="workspace">
 
-export class TextEditor {
-  constructor({ stageEl, overlayEl, videoW, videoH, onSelect, onChange }) {
-    this.stageEl = stageEl;
-    this.overlayEl = overlayEl;
-    this.videoW = videoW;
-    this.videoH = videoH;
-    this.layers = [];
-    this.selectedId = null;
-    this.onSelect = onSelect;
-    this.onChange = onChange;
-  }
+    <!-- Left: library -->
+    <aside class="panel panel-library">
+      <div class="panel-tabs">
+        <button class="tab-btn active" data-tab="songs">Songs</button>
+        <button class="tab-btn" data-tab="favorites">Favorites</button>
+      </div>
 
-  setVideoSize(w, h) {
-    this.videoW = w;
-    this.videoH = h;
-  }
+      <div class="tab-panel" id="tab-songs">
+        <p class="panel-hint">Weekly list, updated on your command. Attach your own audio file to any track to use it.</p>
+        <div class="song-list" id="songList"></div>
+      </div>
 
-  addLayer(duration) {
-    const layer = createDefaultLayer(duration);
-    this.layers.push(layer);
-    this.select(layer.id);
-    this.renderDom();
-    this.onChange();
-    return layer;
-  }
+      <div class="tab-panel hidden" id="tab-favorites">
+        <p class="panel-hint">Starred tracks. These stay put — updating the weekly list never removes them.</p>
+        <div class="song-list" id="favoriteList"></div>
+      </div>
 
-  removeLayer(id) {
-    this.layers = this.layers.filter((l) => l.id !== id);
-    if (this.selectedId === id) this.select(null);
-    this.renderDom();
-    this.onChange();
-  }
+      <div class="library-footer">
+        <label class="btn btn-ghost btn-block" for="ownAudioInput">Add your own audio</label>
+        <input type="file" id="ownAudioInput" accept="audio/*" hidden />
+      </div>
+    </aside>
 
-  getLayer(id) {
-    return this.layers.find((l) => l.id === id);
-  }
+    <!-- Center: stage -->
+    <main class="panel panel-stage">
+      <div class="stage-wrap">
+        <div class="stage" id="stage">
+          <canvas id="previewCanvas"></canvas>
+          <video id="sourceVideo" playsinline hidden></video>
+          <div class="empty-state" id="emptyState">
+            <span class="empty-glyph">▷</span>
+            <p>Open a clip to start editing</p>
+          </div>
+          <div class="overlay-layer" id="overlayLayer"></div>
+        </div>
+      </div>
 
-  select(id) {
-    this.selectedId = id;
-    this.renderDom();
-    this.onSelect(id ? this.getLayer(id) : null);
-  }
+      <div class="transport">
+        <button class="icon-btn" id="playBtn" disabled>▶</button>
+        <span class="time-code" id="timeCurrent">00:00.0</span>
+        <input type="range" id="scrubber" min="0" max="1000" value="0" disabled />
+        <span class="time-code" id="timeTotal">00:00.0</span>
+      </div>
 
-  applyQuickStyle(id, styleName) {
-    const layer = this.getLayer(id);
-    const style = QUICK_STYLES[styleName];
-    if (!layer || !style) return;
-    Object.assign(layer, style);
-    this.renderDom();
-    this.onChange();
-    this.onSelect(layer);
-  }
+      <div class="track-row">
+        <div class="track-label">Sound</div>
+        <div class="track-strip" id="audioTrackStrip">
+          <span class="track-empty">No track added — pick a song or add your own audio</span>
+        </div>
+      </div>
 
-  updateLayer(id, patch) {
-    const layer = this.getLayer(id);
-    if (!layer) return;
-    Object.assign(layer, patch);
-    this.renderDom();
-    this.onChange();
-  }
+      <div class="track-row">
+        <div class="track-label">Captions</div>
+        <div class="track-strip" id="textTrackStrip"></div>
+        <button class="btn btn-small" id="addTextBtn" disabled>+ Add text</button>
+      </div>
+    </main>
 
-  // Visibility gate used both by the live preview and the exporter.
-  activeLayersAt(time) {
-    return this.layers.filter((l) => time >= l.start && time <= l.end);
-  }
+    <!-- Right: inspector -->
+    <aside class="panel panel-inspector" id="inspector">
+      <div class="inspector-empty" id="inspectorEmpty">
+        <p>Select a caption on the stage to style it, or add a new one.</p>
+      </div>
 
-  // ---------- DOM preview ----------
+      <div class="inspector-body hidden" id="inspectorBody">
+        <label class="field">
+          <span>Text</span>
+          <textarea id="fText" rows="2"></textarea>
+        </label>
 
-  renderDom() {
-    this.overlayEl.innerHTML = "";
-    this.layers.forEach((layer) => {
-      const box = document.createElement("div");
-      box.className = "text-box" + (layer.id === this.selectedId ? " selected" : "");
-      box.style.left = layer.xPct * 100 + "%";
-      box.style.top = layer.yPct * 100 + "%";
-      box.style.width = layer.wPct * 100 + "%";
-      box.style.transform = "translate(-50%, -50%)";
-      this.styleBoxText(box, layer);
-      box.textContent = layer.text;
+        <div class="field-row">
+          <label class="field">
+            <span>Font</span>
+            <select id="fFont">
+              <option value="'TikTok Sans', sans-serif">TikTok Sans</option>
+              <option value="'Inter', sans-serif">Inter</option>
+              <option value="'Poppins', sans-serif">Poppins</option>
+              <option value="'IBM Plex Mono', monospace">Plex Mono</option>
+              <option value="'Georgia', serif">Georgia</option>
+              <option value="'Archivo Black', sans-serif">Archivo Black</option>
+            </select>
+          </label>
+          <label class="field field-narrow">
+            <span>Size</span>
+            <input type="number" id="fSize" min="10" max="160" value="40" />
+          </label>
+        </div>
 
-      const handle = document.createElement("div");
-      handle.className = "resize-handle";
-      box.appendChild(handle);
+        <div class="field-row">
+          <label class="field field-narrow">
+            <span>Text color</span>
+            <input type="color" id="fColor" value="#ffffff" />
+          </label>
+          <label class="field field-narrow checkbox-field">
+            <input type="checkbox" id="fStrokeOn" />
+            <span>Outline</span>
+          </label>
+          <label class="field field-narrow">
+            <span>Outline color</span>
+            <input type="color" id="fStrokeColor" value="#000000" />
+          </label>
+        </div>
 
-      box.addEventListener("pointerdown", (e) => this.startDrag(e, layer, box));
-      handle.addEventListener("pointerdown", (e) => {
-        e.stopPropagation();
-        this.startResize(e, layer);
-      });
-      box.addEventListener("click", (e) => {
-        e.stopPropagation();
-        this.select(layer.id);
-      });
+        <div class="field-row">
+          <label class="field field-narrow checkbox-field">
+            <input type="checkbox" id="fBgOn" />
+            <span>Show bg</span>
+          </label>
+          <label class="field field-narrow">
+            <span>Background</span>
+            <input type="color" id="fBg" value="#000000" />
+          </label>
+          <label class="field">
+            <span>Bg shape</span>
+            <select id="fBgMode">
+              <option value="line">Per-line pill</option>
+              <option value="block">Single box</option>
+            </select>
+          </label>
+        </div>
+        <p class="field-note" id="lineBgNote">Per-line pill background only renders while playing/scrubbing and in the export — not while dragging.</p>
 
-      this.overlayEl.appendChild(box);
-    });
-  }
+        <label class="field">
+          <span>Background opacity</span>
+          <input type="range" id="fBgOpacity" min="0" max="100" value="70" />
+        </label>
 
-  styleBoxText(box, layer) {
-    const scale = this.stageEl.clientWidth / (this.videoW || this.stageEl.clientWidth || 1);
-    box.style.fontFamily = layer.fontFamily;
-    box.style.fontSize = layer.fontSize * scale + "px";
-    box.style.color = layer.color;
-    box.style.fontWeight = layer.bold ? "700" : "400";
-    box.style.fontStyle = layer.italic ? "italic" : "normal";
-    box.style.textAlign = layer.align;
-    box.style.borderRadius = layer.radius + "px";
-    box.style.background = layer.bgOn
-      ? hexToRgba(layer.bgColor, layer.bgOpacity / 100)
-      : "transparent";
-  }
+        <label class="field">
+          <span>Corner rounding</span>
+          <input type="range" id="fRadius" min="0" max="40" value="8" />
+        </label>
 
-  refreshScale() {
-    this.layers.forEach((l) => {
-      const box = [...this.overlayEl.children].find((_, i) => this.layers[i] === l);
-    });
-    this.renderDom();
-  }
+        <div class="field-row">
+          <label class="field field-narrow checkbox-field">
+            <input type="checkbox" id="fBold" />
+            <span>Bold</span>
+          </label>
+          <label class="field field-narrow checkbox-field">
+            <input type="checkbox" id="fItalic" />
+            <span>Italic</span>
+          </label>
+          <label class="field">
+            <span>Align</span>
+            <select id="fAlign">
+              <option value="center">Center</option>
+              <option value="left">Left</option>
+              <option value="right">Right</option>
+            </select>
+          </label>
+        </div>
 
-  startDrag(e, layer, box) {
-    e.preventDefault();
-    this.select(layer.id);
-    const rect = this.stageEl.getBoundingClientRect();
-    const move = (ev) => {
-      const x = (ev.clientX - rect.left) / rect.width;
-      const y = (ev.clientY - rect.top) / rect.height;
-      layer.xPct = clamp(x, 0, 1);
-      layer.yPct = clamp(y, 0, 1);
-      this.renderDom();
-    };
-    const up = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-      this.onChange();
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-  }
+        <div class="quick-styles">
+          <span class="field-label">Quick styles</span>
+          <div class="style-chip-row">
+            <button class="style-chip" data-style="classic">Classic outline</button>
+            <button class="style-chip" data-style="sticker">Sticker (white)</button>
+            <button class="style-chip" data-style="pill">Color pill</button>
+            <button class="style-chip" data-style="minimal">Minimal</button>
+          </div>
+        </div>
 
-  startResize(e, layer) {
-    e.preventDefault();
-    const rect = this.stageEl.getBoundingClientRect();
-    const move = (ev) => {
-      const x = (ev.clientX - rect.left) / rect.width;
-      const w = Math.abs(x - layer.xPct) * 2;
-      layer.wPct = clamp(w, 0.1, 1);
-      this.renderDom();
-    };
-    const up = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-      this.onChange();
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-  }
+        <div class="field-row">
+          <label class="field field-narrow">
+            <span>Appears at</span>
+            <input type="number" id="fStart" min="0" step="0.1" />
+          </label>
+          <label class="field field-narrow">
+            <span>Disappears at</span>
+            <input type="number" id="fEnd" min="0" step="0.1" />
+          </label>
+        </div>
 
-  // ---------- Canvas draw (shared by live preview canvas + export) ----------
+        <button class="btn btn-danger btn-block" id="deleteTextBtn">Delete this caption</button>
+      </div>
+    </aside>
 
-  drawAt(ctx, canvasW, canvasH, time) {
-    this.activeLayersAt(time).forEach((layer) => {
-      this.drawLayer(ctx, canvasW, canvasH, layer);
-    });
-  }
+  </div>
+</div>
 
-  drawLayer(ctx, canvasW, canvasH, layer) {
-    const fontSize = layer.fontSize * (canvasW / (this.videoW || canvasW));
-    const weight = layer.bold ? "700" : "400";
-    const style = layer.italic ? "italic" : "normal";
-    ctx.font = `${style} ${weight} ${fontSize}px ${layer.fontFamily.replace(/'/g, "")}`;
-    ctx.textAlign = layer.align;
-    ctx.textBaseline = "middle";
+<div class="toast" id="toast"></div>
+<div class="export-overlay hidden" id="exportOverlay">
+  <div class="export-card">
+    <div class="export-spinner"></div>
+    <p id="exportStatus">Rendering…</p>
+  </div>
+</div>
 
-    const cx = layer.xPct * canvasW;
-    const cy = layer.yPct * canvasH;
-    const maxWidth = layer.wPct * canvasW;
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
 
-    const lines = wrapText(ctx, layer.text, maxWidth);
-    const lineHeight = fontSize * 1.25;
-    const totalHeight = lines.length * lineHeight;
+# ClipDesk
 
-    if (layer.bgOn) {
-      let widest = 0;
-      lines.forEach((line) => { widest = Math.max(widest, ctx.measureText(line).width); });
-      const padX = fontSize * 0.4;
-      const padY = fontSize * 0.25;
-      const boxW = widest + padX * 2;
-      const boxH = totalHeight + padY * 2;
-      const boxX = cx - boxW / 2;
-      const boxY = cy - boxH / 2;
-      ctx.fillStyle = hexToRgba(layer.bgColor, layer.bgOpacity / 100);
-      roundRect(ctx, boxX, boxY, boxW, boxH, layer.radius * (canvasW / (this.videoW || canvasW)));
-      ctx.fill();
-    }
+A private, no-feed clip editor for adding TikTok-style captions and music to your own videos — built so you don't need TikTok installed just to edit.
 
-    ctx.fillStyle = layer.color;
-    const startY = cy - totalHeight / 2 + lineHeight / 2;
-    let anchorX = cx;
-    if (layer.align === "left") anchorX = cx - maxWidth / 2;
-    if (layer.align === "right") anchorX = cx + maxWidth / 2;
+Everything runs client-side in the browser. Nothing is uploaded anywhere.
 
-    lines.forEach((line, i) => {
-      ctx.fillText(line, anchorX, startY + i * lineHeight);
-    });
-  }
-}
+## What it does
 
-function wrapText(ctx, text, maxWidth) {
-  const paragraphs = text.split("\n");
-  const lines = [];
-  paragraphs.forEach((para) => {
-    const words = para.split(" ");
-    let current = "";
-    words.forEach((word) => {
-      const test = current ? current + " " + word : word;
-      if (ctx.measureText(test).width > maxWidth && current) {
-        lines.push(current);
-        current = word;
-      } else {
-        current = test;
-      }
-    });
-    lines.push(current);
-  });
-  return lines;
-}
+- **Open a clip** (any video file) and preview it on a 9:16 stage.
+- **Add captions**: drag to position, resize the box, and style each one independently — font, size, color, background color/opacity, corner rounding, bold/italic, alignment, and a few quick-style presets (classic caption, bold block, minimal, highlight bar). Each caption has its own appear/disappear time.
+- **Add sound**: attach your own audio file, or pick a track from the Songs library and attach audio to it yourself (see note on trending songs below). Volume is adjustable.
+- **Favorites**: star any song and it's saved to your browser's local database (IndexedDB), including any audio you attached to it. Favorites are never touched by a weekly list refresh.
+- **Export**: renders captions + music into an actual downloadable `.webm` video, baked in — the same way CapCut/TikTok "burn in" captions.
 
-function roundRect(ctx, x, y, w, h, r) {
-  r = Math.min(r, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
+## Running it
 
-function hexToRgba(hex, alpha) {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
+No build step. Options:
+- Open `index.html` directly in a browser, or
+- Push the folder to GitHub and deploy on Netlify (drag-and-drop the folder onto Netlify, or connect the repo) — it's a static site.
 
-function clamp(v, min, max) {
-  return Math.max(min, Math.min(max, v));
-}
+## About the trending songs list
 
-export { QUICK_STYLES };
+`data/trending-songs.json` holds **metadata only** (title / artist / vibe tag) — I'm not able to fetch or bundle actual copyrighted audio files, and I won't act on a schedule automatically. The workflow is:
+
+1. About once a week, tell me (Claude) something like: **"update the trending songs list."**
+2. I'll search for what's currently trending and rewrite the `songs` array in `data/trending-songs.json` with fresh metadata.
+3. Your **Favorites** tab is untouched — it lives in IndexedDB, a separate store this file never writes to.
+4. For any song (favorited or not), click **Attach** to link an audio file you own to that entry. If you then star it, the file is saved permanently in your browser; if you don't star it, the attachment only lasts for that session.
+
+## File map
+
+```
+clipdesk/
+├── index.html
+├── css/style.css
+├── js/
+│   ├── app.js         — playback, transport, inspector wiring, export trigger
+│   ├── textEditor.js  — caption layers: drag/resize, styling, canvas drawing
+│   ├── songs.js        — trending list rendering + IndexedDB favorites
+│   └── exporter.js     — canvas capture + Web Audio mixing + MediaRecorder
+└── data/trending-songs.json  — weekly-refreshed song metadata (see above)
+```
+
+## Notes / limitations
+
+- Export format is `.webm` (via `MediaRecorder`) since that's what browsers can encode natively without extra libraries. Most players (VLC, phones, uploaders) handle it fine; if you specifically need `.mp4`, that'd mean adding an ffmpeg.wasm conversion step, which I can add later if it matters to you.
+- Only one music track at a time, to keep this close to how you'd actually use it (one caption pass + one sound), per your "keep it basic" steer. Say the word if you want a second track later.
+- Everything (favorites, attached audio) lives in that browser's IndexedDB — it won't follow you to a different browser or device unless you export/re-attach there too.
