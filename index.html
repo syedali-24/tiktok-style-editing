@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ClipDesk — caption &amp; sound editor</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<div class="app">
+
+  <!-- Top bar -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">◈</span>
+      <span class="brand-name">ClipDesk</span>
+    </div>
+    <div class="project-name" id="projectName">untitled clip</div>
+    <div class="topbar-actions">
+      <label class="btn btn-ghost" for="videoInput">Open clip</label>
+      <input type="file" id="videoInput" accept="video/*" hidden />
+      <button class="btn btn-primary" id="exportBtn" disabled>Export video</button>
+    </div>
+  </header>
+
+  <div class="workspace">
+
+    <!-- Left: library -->
+    <aside class="panel panel-library">
+      <div class="panel-tabs">
+        <button class="tab-btn active" data-tab="songs">Songs</button>
+        <button class="tab-btn" data-tab="favorites">Favorites</button>
+      </div>
+
+      <div class="tab-panel" id="tab-songs">
+        <p class="panel-hint">Weekly list, updated on your command. Attach your own audio file to any track to use it.</p>
+        <div class="song-list" id="songList"></div>
+      </div>
+
+      <div class="tab-panel hidden" id="tab-favorites">
+        <p class="panel-hint">Starred tracks. These stay put — updating the weekly list never removes them.</p>
+        <div class="song-list" id="favoriteList"></div>
+      </div>
+
+      <div class="library-footer">
+        <label class="btn btn-ghost btn-block" for="ownAudioInput">Add your own audio</label>
+        <input type="file" id="ownAudioInput" accept="audio/*" hidden />
+      </div>
+    </aside>
+
+    <!-- Center: stage -->
+    <main class="panel panel-stage">
+      <div class="stage-wrap">
+        <div class="stage" id="stage">
+          <canvas id="previewCanvas"></canvas>
+          <video id="sourceVideo" playsinline hidden></video>
+          <div class="empty-state" id="emptyState">
+            <span class="empty-glyph">▷</span>
+            <p>Open a clip to start editing</p>
+          </div>
+          <div class="overlay-layer" id="overlayLayer"></div>
+        </div>
+      </div>
+
+      <div class="transport">
+        <button class="icon-btn" id="playBtn" disabled>▶</button>
+        <span class="time-code" id="timeCurrent">00:00.0</span>
+        <input type="range" id="scrubber" min="0" max="1000" value="0" disabled />
+        <span class="time-code" id="timeTotal">00:00.0</span>
+      </div>
+
+      <div class="track-row">
+        <div class="track-label">Sound</div>
+        <div class="track-strip" id="audioTrackStrip">
+          <span class="track-empty">No track added — pick a song or add your own audio</span>
+        </div>
+      </div>
+
+      <div class="track-row">
+        <div class="track-label">Captions</div>
+        <div class="track-strip" id="textTrackStrip"></div>
+        <button class="btn btn-small" id="addTextBtn" disabled>+ Add text</button>
+      </div>
+    </main>
+
+    <!-- Right: inspector -->
+    <aside class="panel panel-inspector" id="inspector">
+      <div class="inspector-empty" id="inspectorEmpty">
+        <p>Select a caption on the stage to style it, or add a new one.</p>
+      </div>
+
+      <div class="inspector-body hidden" id="inspectorBody">
+        <label class="field">
+          <span>Text</span>
+          <textarea id="fText" rows="2"></textarea>
+        </label>
+
+        <div class="field-row">
+          <label class="field">
+            <span>Font</span>
+            <select id="fFont">
+              <option value="'Inter', sans-serif">Inter</option>
+              <option value="'Poppins', sans-serif">Poppins</option>
+              <option value="'IBM Plex Mono', monospace">Plex Mono</option>
+              <option value="'Georgia', serif">Georgia</option>
+              <option value="'Archivo Black', sans-serif">Archivo Black</option>
+            </select>
+          </label>
+          <label class="field field-narrow">
+            <span>Size</span>
+            <input type="number" id="fSize" min="10" max="160" value="40" />
+          </label>
+        </div>
+
+        <div class="field-row">
+          <label class="field field-narrow">
+            <span>Text color</span>
+            <input type="color" id="fColor" value="#ffffff" />
+          </label>
+          <label class="field field-narrow">
+            <span>Background</span>
+            <input type="color" id="fBg" value="#000000" />
+          </label>
+          <label class="field field-narrow checkbox-field">
+            <input type="checkbox" id="fBgOn" />
+            <span>Show bg</span>
+          </label>
+        </div>
+
+        <label class="field">
+          <span>Background opacity</span>
+          <input type="range" id="fBgOpacity" min="0" max="100" value="70" />
+        </label>
+
+        <label class="field">
+          <span>Corner rounding</span>
+          <input type="range" id="fRadius" min="0" max="40" value="8" />
+        </label>
+
+        <div class="field-row">
+          <label class="field field-narrow checkbox-field">
+            <input type="checkbox" id="fBold" />
+            <span>Bold</span>
+          </label>
+          <label class="field field-narrow checkbox-field">
+            <input type="checkbox" id="fItalic" />
+            <span>Italic</span>
+          </label>
+          <label class="field">
+            <span>Align</span>
+            <select id="fAlign">
+              <option value="center">Center</option>
+              <option value="left">Left</option>
+              <option value="right">Right</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="quick-styles">
+          <span class="field-label">Quick styles</span>
+          <div class="style-chip-row">
+            <button class="style-chip" data-style="classic">Classic caption</button>
+            <button class="style-chip" data-style="bold-block">Bold block</button>
+            <button class="style-chip" data-style="minimal">Minimal</button>
+            <button class="style-chip" data-style="highlight">Highlight bar</button>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <label class="field field-narrow">
+            <span>Appears at</span>
+            <input type="number" id="fStart" min="0" step="0.1" />
+          </label>
+          <label class="field field-narrow">
+            <span>Disappears at</span>
+            <input type="number" id="fEnd" min="0" step="0.1" />
+          </label>
+        </div>
+
+        <button class="btn btn-danger btn-block" id="deleteTextBtn">Delete this caption</button>
+      </div>
+    </aside>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="export-overlay hidden" id="exportOverlay">
+  <div class="export-card">
+    <div class="export-spinner"></div>
+    <p id="exportStatus">Rendering…</p>
+  </div>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

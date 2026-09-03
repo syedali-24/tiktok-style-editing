@@ -1,0 +1,8 @@
+{
+  "_comment": "Metadata only — no audio files bundled here (copyright). Attach your own audio to any entry in the app, or star it as a favorite to keep it permanently. Ask Claude to 'update the trending songs list' about once a week and it will refresh the entries below by searching what's currently trending, without touching anything in your Favorites tab.",
+  "updated": "2026-09-03",
+  "songs": [
+    { "id": "seed-1", "title": "Add your own", "artist": "—", "tag": "starter" },
+    { "id": "seed-2", "title": "Ask Claude to fetch this week's trending list", "artist": "—", "tag": "starter" }
+  ]
+}
